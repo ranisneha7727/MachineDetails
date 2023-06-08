@@ -65,12 +65,12 @@ else
         {
             if (!string.IsNullOrEmpty(strSearchVal))
             {
-                var OutDetails = await httpClient.GetStringAsync("http://localhost:8080/api/v1/machines/" + strSearchVal);
+                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines/" + strSearchVal);
                 outTable = (DataTable)JsonConvert.DeserializeObject(OutDetails, (typeof(DataTable)));
             }
             else
             {
-                var OutDetails = await httpClient.GetStringAsync("http://localhost:8080/api/v1/machines");
+                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines/");
                 outTable = (DataTable)JsonConvert.DeserializeObject(OutDetails, (typeof(DataTable)));
             }
         }
@@ -90,7 +90,7 @@ else
         outTable.Clear();
         try
         {
-            var outPutLatestSeries = await httpClient.GetStringAsync("http://localhost:8080/api/machines/latest");
+            var outPutLatestSeries = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines/latest");
             outTable = (DataTable)JsonConvert.DeserializeObject(outPutLatestSeries, (typeof(DataTable)));
         }
         catch (Exception ex)
