@@ -9,16 +9,16 @@
 @using Newtonsoft.Json;
 
 <PageTitle>Home</PageTitle>
-<h1>Search</h1>
+<h1>Search Machines/Assets</h1>
 <br />
 <div>
-    <input type="button" style="width:250px" value="Search Asset/Machine" @onclick="SearchAsset" />
+    <input type="button" style="width:180px" value="Search" @onclick="SearchAsset" />
     <input type="text" style="width:200px" @bind-value="@strSearchVal" />
 </div>
 <div>
     <br />
     <br />
-    <input type="button" style="width:250px" value="Get Latest Machine Details" @onclick="ShowLatestMachine" />
+    <input type="button" style="width:180px" value="Get Latest Machine" @onclick="ShowLatestMachine" />
 </div>
 <br />
 
@@ -42,41 +42,31 @@
         </tbody>
     </table>
 }
-else
-{
-    if (!string.IsNullOrEmpty(strSearchVal))
-    {
-        <div>
-            <label class="col-form-label"><b>Latest Assset Used: @strLatestMachine</b></label>
-        </div>
-    }
-}
 
 @code {
     private string? strSearchVal;
-    private string strLatestMachine = string.Empty;
     public DataTable outTable = new DataTable();
 
-    private async Task SearchAsset()
+    private async Task? SearchAsset()
     {
         HttpClient httpClient = new HttpClient();
-        strLatestMachine = string.Empty;
+        outTable.Clear();
         try
         {
             if (!string.IsNullOrEmpty(strSearchVal))
             {
-                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines/" + strSearchVal);
+                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines?search=" + strSearchVal);
                 outTable = (DataTable)JsonConvert.DeserializeObject(OutDetails, (typeof(DataTable)));
             }
             else
             {
-                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines/");
+                var OutDetails = await httpClient.GetStringAsync("https://localhost:8080/api/v1/machines");
                 outTable = (DataTable)JsonConvert.DeserializeObject(OutDetails, (typeof(DataTable)));
             }
         }
         catch (Exception ex)
         {
-            throw;
+            //return null;
         }
         finally
         {
@@ -95,7 +85,7 @@ else
         }
         catch (Exception ex)
         {
-            strLatestMachine = ex.Message;
+            
         }
         finally
         {
