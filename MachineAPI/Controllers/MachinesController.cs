@@ -1,11 +1,9 @@
-﻿using MachineAPI.Models;
-using MachineAPI.Entities;
-using MongoDB.Bson;
+﻿using MongoDB.Bson;
 using MongoDB.Driver;
 using Microsoft.AspNetCore.Mvc;
-using System.Data;
-using MongoDB.Driver.Linq;
-using System.Text.RegularExpressions;
+using MachineAPI.Services;
+using MongoDB.Bson.IO;
+using MachineAPI.Models;
 
 namespace MachineAPI.Controllers
 {
@@ -13,8 +11,10 @@ namespace MachineAPI.Controllers
     [ApiController]
     public class MachinesController : ControllerBase
     {
-        public MachinesController()
+        private readonly IMachinetService _machineAndAssetService;
+        public MachinesController(IMachinetService machineAndAssetService)
         {
+            _machineAndAssetService = machineAndAssetService;
         }
 
         [HttpGet]
@@ -22,37 +22,18 @@ namespace MachineAPI.Controllers
         {
             try
             {
-                var client = new MongoClient(Constants.ConnectionString);
-                var db = client.GetDatabase(Constants.DbName);
-                var machinecollectionData = db.GetCollection<BsonDocument>(Constants.MachineCollectionName);
-                if (!string.IsNullOrEmpty(search))
+                List<MapBsonToMachineModel>? documents = null;
+                if(search != null)  
                 {
-                    var queryExp = new BsonRegularExpression(new Regex(search, RegexOptions.IgnoreCase));
-                    var builder = Builders<BsonDocument>.Filter;
-                    var filter = builder.Regex(Constants.ColumnNameMachine, queryExp);
-                    var documents = machinecollectionData.Find(filter).ToList();
-                    if (documents.Any())
-                        return Ok(documents.ConvertAll(BsonTypeMapper.MapToDotNetValue));
-                    else
-                    {
-                        filter = builder.Regex(Constants.ColumnNameAsset, queryExp);
-                        documents = machinecollectionData.Find(filter).ToList();
-                        if (documents.Any())
-                            return Ok(documents.ConvertAll(BsonTypeMapper.MapToDotNetValue));
-                        else
-                            return null;
-                    }
+                    documents = _machineAndAssetService.SearchDocument(search);
                 }
                 else
-                {
-                    var documents = machinecollectionData.Find(new BsonDocument()).ToList();
-                    if (documents .Any())
-                    {
-                        return Ok((documents.ConvertAll(BsonTypeMapper.MapToDotNetValue)));
-                    }
-                    else
-                        return null;
-                }
+                    documents = _machineAndAssetService.SearchAllDocument();
+
+                if (documents != null)
+                    return Ok(documents);
+                else
+                    return NotFound();
             }
             catch
             {
@@ -61,13 +42,13 @@ namespace MachineAPI.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddAsset(Machine machine)
+        public IActionResult AddAsset(MachineModel machine)
         {
             try
             {
                 if (machine.MachineName != null && machine.Assets.Count > 0)
                 {
-                    bool ifCreated = AddAssetToDb.AddAssetOrMachineToDB(machine);
+                    bool ifCreated = _machineAndAssetService.AddAssetOrMachine(machine);
                     if (ifCreated)
                         return Ok();
                     else
@@ -84,13 +65,13 @@ namespace MachineAPI.Controllers
 
         [HttpDelete]
         [Route("{machine}/{asset}")]
-        public async Task<IActionResult> DeleteAssetAsync(string machine, string asset)
+        public async Task<IActionResult> DeleteAsset(string machine, string asset)
         {
             try
             {
                 if (!string.IsNullOrEmpty(machine) && !string.IsNullOrEmpty(asset))
                 {
-                    var deletedDoc = await DeleteAssetFromDb.RemoveAssetFromMachine(machine, asset);
+                    var deletedDoc = await _machineAndAssetService.RemoveAssetFromMachine(machine, asset);
                     if (deletedDoc != null)
                         return Ok(deletedDoc);
                     else
@@ -107,92 +88,20 @@ namespace MachineAPI.Controllers
 
         [Route("latest")]
         [HttpGet]
-        public async Task<IActionResult?> LatestMachine()
+        public IActionResult? LatestMachine()
         {
             try
             {
-                DataTable? dataFromDB = new();
-                DataTable? outSearchData = new ();
-
-                var client = new MongoClient(Constants.ConnectionString);
-                var db = client.GetDatabase(Constants.DbName);
-                var machinecollectionData = db.GetCollection<BsonDocument>(Constants.MachineCollectionName);
-                var documents = machinecollectionData.Find(new BsonDocument()).ToList();
-                
-                dataFromDB = ConvertToDataTable(documents);
-
-                if (dataFromDB != null && dataFromDB.Rows.Count>0)
-                {
-                    outSearchData = GetLatestMachine(dataFromDB);
-                    if (outSearchData != null && outSearchData.Rows.Count > 0)
-                        return Ok(outSearchData);
-                    else
-                        return BadRequest();
-                }
-                else
-                   return BadRequest();
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
-
-        private DataTable? ConvertToDataTable(List<BsonDocument> documents)
-        {
-            try
-            {
-                DataTable? dt = new DataTable();
-                foreach (BsonElement elem in documents[0].Elements)
-                {
-                    dt.Columns.Add(elem.Name);
-                }
-                for (int i=0; i< documents.Count; i++) 
-                {
-                    DataRow row = dt.NewRow();
-                    foreach (BsonElement elem in documents[i])
-                    {
-                        row[elem.Name] = elem.Value;
-                    }
-                    dt.Rows.Add(row);
-                }
-                return dt;
+                var docs = _machineAndAssetService.GetLatestMachine();
+                if (docs !=null)
+                    return Ok(docs);
+                return
+                    NotFound();
             }
             catch
             {
-                return null;
+                return BadRequest();
             }
-        }
-
-        private static DataTable? GetLatestMachine(DataTable ipTble)
-        {
-            int latestCountCheck = 0;
-            string[] machineNames, assetNames;
-            DataTable outData = new DataTable();
-
-            if (ipTble != null)
-            {
-                machineNames = ipTble.DefaultView.ToTable(true, Constants.ColumnNameMachine).AsEnumerable().Select(r => r.Field<string>(Constants.ColumnNameMachine)).ToArray();
-                assetNames = ipTble.DefaultView.ToTable(true, Constants.ColumnNameAsset).AsEnumerable().Select(r => r.Field<string>(Constants.ColumnNameAsset)).ToArray();
-                foreach (string machineName in machineNames)
-                {
-                    DataRow[] filteredAssetDetails = ipTble.Select("MachineName like '" + machineName + "'");
-                    foreach (DataRow assetDetails in filteredAssetDetails)
-                    {
-                        string strLatestSeriesOfAsset = $"S{ipTble.Select("AssetName like '" + assetDetails[Constants.ColumnNameAsset].ToString() + "'").Max(r => Convert.ToInt64(r[Constants.ColumnNameSeriesNo].ToString().Trim().Remove(0, 1)))}";
-                        if (assetDetails[Constants.ColumnNameSeriesNo].ToString().Trim().Equals(strLatestSeriesOfAsset, StringComparison.InvariantCultureIgnoreCase))
-                            latestCountCheck++;
-                    }
-                    if (latestCountCheck == filteredAssetDetails.GetLength(0))
-                    {
-                        outData = filteredAssetDetails.CopyToDataTable();
-                    }
-                    latestCountCheck = 0;
-                }
-                return outData;
-            }
-            else
-                return null;
         }
     }
 }

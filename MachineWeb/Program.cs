@@ -1,10 +1,13 @@
+using MachineAPI.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 //builder.Services.AddSingleton();
-
+//builder.Services.AddSingleton<IMachineAndAssetService, MachineAndAssetService>();
+builder.Services.AddSingleton<HttpClient>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
